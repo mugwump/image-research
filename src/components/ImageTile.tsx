@@ -17,6 +17,7 @@ const EMPTY_METADATA: ResearchMetadata = {
   location: null,
   copyright: null,
   pageUrl: "",
+  images: [],
 };
 
 export function ImageTile({ result }: ImageTileProps) {

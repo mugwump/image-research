@@ -147,7 +147,7 @@ app.get("/api/research", async (req, res) => {
     }
 
     const html = await response.text();
-    const meta = extractPageMetadata(html);
+    const meta = extractPageMetadata(html, pageUrl);
     meta.pageUrl = pageUrl;
 
     res.json(meta);
@@ -212,9 +212,86 @@ interface PageMetadata {
   location: string | null;
   copyright: string | null;
   pageUrl: string;
+  images: string[];
 }
 
-function extractPageMetadata(html: string): PageMetadata {
+const SKIP_PATTERNS = [
+  /logo/i,
+  /icon/i,
+  /favicon/i,
+  /avatar/i,
+  /badge/i,
+  /button/i,
+  /sprite/i,
+  /tracking/i,
+  /pixel/i,
+  /spacer/i,
+  /banner-ad/i,
+  /advertisement/i,
+  /\bads?\b/i,
+  /\.svg$/i,
+  /data:image/i,
+  /1x1/i,
+  /blank\./i,
+];
+
+function extractImages(html: string, baseUrl: string): string[] {
+  const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*/gi;
+  const srcsetRegex = /srcset=["']([^"']+)["']/gi;
+  const ogImages: string[] = [];
+  const seen = new Set<string>();
+  const results: string[] = [];
+
+  // Extract og:image and twitter:image (usually high quality)
+  for (const prop of ["og:image", "twitter:image", "twitter:image:src"]) {
+    const val = extractMetaContent(html, prop);
+    if (val) ogImages.push(val);
+  }
+
+  // Collect all candidate URLs
+  const candidates: string[] = [...ogImages];
+
+  let match: RegExpExecArray | null;
+  while ((match = imgRegex.exec(html)) !== null) {
+    candidates.push(match[1]);
+  }
+
+  // Also grab largest images from srcset attributes
+  while ((match = srcsetRegex.exec(html)) !== null) {
+    const parts = match[1].split(",").map((s) => s.trim());
+    // Pick the last entry (typically the largest)
+    const last = parts[parts.length - 1];
+    if (last) {
+      const url = last.split(/\s+/)[0];
+      if (url) candidates.push(url);
+    }
+  }
+
+  for (const raw of candidates) {
+    const decoded = decodeHtmlEntities(raw.trim());
+    if (!decoded || decoded.startsWith("data:")) continue;
+
+    // Resolve relative URLs
+    let absolute: string;
+    try {
+      absolute = new URL(decoded, baseUrl).href;
+    } catch {
+      continue;
+    }
+
+    if (seen.has(absolute)) continue;
+    seen.add(absolute);
+
+    // Skip icons, logos, tracking pixels, etc.
+    if (SKIP_PATTERNS.some((p) => p.test(absolute))) continue;
+
+    results.push(absolute);
+  }
+
+  return results.slice(0, 50); // cap at 50 images
+}
+
+function extractPageMetadata(html: string, baseUrl: string): PageMetadata {
   // Author / photographer
   const photographer =
     extractMetaContent(html, "author") ??
@@ -261,6 +338,8 @@ function extractPageMetadata(html: string): PageMetadata {
     extractMetaContent(html, "dc.rights") ??
     extractMetaContent(html, "dcterms.rights");
 
+  const images = extractImages(html, baseUrl);
+
   return {
     photographer,
     caption,
@@ -269,8 +348,46 @@ function extractPageMetadata(html: string): PageMetadata {
     location,
     copyright,
     pageUrl: "",
+    images,
   };
 }
+
+// Image proxy endpoint — serves image inline (for gallery thumbnails)
+app.get("/api/proxy-image", async (req, res) => {
+  const imageUrl = req.query.url as string;
+
+  if (!imageUrl) {
+    res.status(400).json({ error: "Missing query parameter 'url'" });
+    return;
+  }
+
+  try {
+    const response = await fetch(imageUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (compatible; ImageResearchBot/1.0; +http://localhost)",
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!response.ok || !response.body) {
+      res.status(502).json({ error: "Failed to fetch image" });
+      return;
+    }
+
+    const contentType =
+      response.headers.get("content-type") || "image/jpeg";
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "public, max-age=86400");
+
+    const arrayBuffer = await response.arrayBuffer();
+    res.send(Buffer.from(arrayBuffer));
+  } catch (err) {
+    console.error("Proxy image error:", err);
+    res.status(500).json({ error: "Failed to proxy image" });
+  }
+});
 
 // Download proxy endpoint
 app.get("/api/download", async (req, res) => {
