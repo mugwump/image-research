@@ -68,6 +68,7 @@ function GalleryImage({
 function Lightbox({
   src,
   caption,
+  pageUrl,
   onClose,
   onPrev,
   onNext,
@@ -76,6 +77,7 @@ function Lightbox({
 }: {
   src: string;
   caption: string | null;
+  pageUrl: string;
   onClose: () => void;
   onPrev: () => void;
   onNext: () => void;
@@ -122,12 +124,18 @@ function Lightbox({
         </button>
       )}
 
-      <img
-        className={styles.lightboxImg}
-        src={proxiedSrc}
-        alt={caption ?? ""}
+      <a
+        href={pageUrl}
+        target="_blank"
+        rel="noopener noreferrer"
         onClick={(e) => e.stopPropagation()}
-      />
+      >
+        <img
+          className={styles.lightboxImg}
+          src={proxiedSrc}
+          alt={caption ?? ""}
+        />
+      </a>
 
       {caption && (
         <div
@@ -247,6 +255,7 @@ export function ResearchModal({
         <Lightbox
           src={metadata.images[lightboxIndex].url}
           caption={metadata.images[lightboxIndex].caption}
+          pageUrl={metadata.pageUrl}
           onClose={() => setLightboxIndex(null)}
           onPrev={() => setLightboxIndex((i) => Math.max(0, (i ?? 0) - 1))}
           onNext={() =>
