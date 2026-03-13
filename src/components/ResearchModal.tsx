@@ -25,7 +25,13 @@ function MetaRow({ label, value }: MetaRowProps) {
   );
 }
 
-function GalleryImage({ src }: { src: string }) {
+function GalleryImage({
+  src,
+  onSelect,
+}: {
+  src: string;
+  onSelect: (src: string) => void;
+}) {
   const [failed, setFailed] = useState(false);
   const proxiedSrc = `/api/proxy-image?url=${encodeURIComponent(src)}`;
 
@@ -37,7 +43,7 @@ function GalleryImage({ src }: { src: string }) {
   };
 
   return (
-    <div className={styles.galleryItem}>
+    <div className={styles.galleryItem} onClick={() => onSelect(src)}>
       <img
         className={styles.galleryImg}
         src={proxiedSrc}
@@ -56,12 +62,50 @@ function GalleryImage({ src }: { src: string }) {
   );
 }
 
+function Lightbox({
+  src,
+  onClose,
+}: {
+  src: string;
+  onClose: () => void;
+}) {
+  const proxiedSrc = `/api/proxy-image?url=${encodeURIComponent(src)}`;
+
+  const handleDownload = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    downloadImage(src, "image");
+  };
+
+  return (
+    <div className={styles.lightboxOverlay} onClick={onClose}>
+      <button className={styles.lightboxClose} onClick={onClose}>
+        ✕
+      </button>
+      <img
+        className={styles.lightboxImg}
+        src={proxiedSrc}
+        alt=""
+        onClick={(e) => e.stopPropagation()}
+      />
+      <button
+        className={styles.lightboxDownload}
+        onClick={handleDownload}
+        title="Download original image"
+      >
+        ⬇ Download
+      </button>
+    </div>
+  );
+}
+
 export function ResearchModal({
   metadata,
   isLoading,
   error,
   onClose,
 }: ResearchModalProps) {
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
   const hasMetaData =
     metadata.photographer ||
     metadata.caption ||
@@ -114,7 +158,11 @@ export function ResearchModal({
               </span>
               <div className={styles.gallery}>
                 {metadata.images.map((src) => (
-                  <GalleryImage key={src} src={src} />
+                  <GalleryImage
+                    key={src}
+                    src={src}
+                    onSelect={setLightboxSrc}
+                  />
                 ))}
               </div>
             </div>
@@ -132,6 +180,10 @@ export function ResearchModal({
           )}
         </div>
       </div>
+
+      {lightboxSrc && (
+        <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+      )}
     </div>
   );
 }
