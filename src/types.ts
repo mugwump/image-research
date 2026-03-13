@@ -24,5 +24,5 @@ export interface ResearchMetadata {
   location: string | null;
   copyright: string | null;
   pageUrl: string;
-  images: string[];
+  images: Array<{ url: string; caption: string | null }>;
 }

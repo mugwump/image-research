@@ -27,10 +27,12 @@ function MetaRow({ label, value }: MetaRowProps) {
 
 function GalleryImage({
   src,
+  caption,
   onSelect,
 }: {
   src: string;
-  onSelect: (src: string) => void;
+  caption: string | null;
+  onSelect: () => void;
 }) {
   const [failed, setFailed] = useState(false);
   const proxiedSrc = `/api/proxy-image?url=${encodeURIComponent(src)}`;
@@ -43,14 +45,15 @@ function GalleryImage({
   };
 
   return (
-    <div className={styles.galleryItem} onClick={() => onSelect(src)}>
+    <div className={styles.galleryItem} onClick={onSelect}>
       <img
         className={styles.galleryImg}
         src={proxiedSrc}
-        alt=""
+        alt={caption ?? ""}
         loading="lazy"
         onError={() => setFailed(true)}
       />
+      {caption && <div className={styles.galleryCaption}>{caption}</div>}
       <button
         className={styles.downloadOverlay}
         onClick={handleDownload}
@@ -64,6 +67,7 @@ function GalleryImage({
 
 function Lightbox({
   src,
+  caption,
   onClose,
   onPrev,
   onNext,
@@ -71,6 +75,7 @@ function Lightbox({
   hasNext,
 }: {
   src: string;
+  caption: string | null;
   onClose: () => void;
   onPrev: () => void;
   onNext: () => void;
@@ -90,7 +95,7 @@ function Lightbox({
       else if (e.key === "ArrowLeft" && hasPrev) onPrev();
       else if (e.key === "ArrowRight" && hasNext) onNext();
     },
-    [onClose, onPrev, onNext, hasPrev, hasNext]
+    [onClose, onPrev, onNext, hasPrev, hasNext],
   );
 
   useEffect(() => {
@@ -107,7 +112,10 @@ function Lightbox({
       {hasPrev && (
         <button
           className={`${styles.lightboxArrow} ${styles.lightboxArrowLeft}`}
-          onClick={(e) => { e.stopPropagation(); onPrev(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onPrev();
+          }}
           title="Previous image"
         >
           ‹
@@ -117,14 +125,26 @@ function Lightbox({
       <img
         className={styles.lightboxImg}
         src={proxiedSrc}
-        alt=""
+        alt={caption ?? ""}
         onClick={(e) => e.stopPropagation()}
       />
+
+      {caption && (
+        <div
+          className={styles.lightboxCaption}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {caption}
+        </div>
+      )}
 
       {hasNext && (
         <button
           className={`${styles.lightboxArrow} ${styles.lightboxArrowRight}`}
-          onClick={(e) => { e.stopPropagation(); onNext(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onNext();
+          }}
           title="Next image"
         >
           ›
@@ -159,6 +179,7 @@ export function ResearchModal({
     metadata.copyright;
 
   const hasImages = metadata.images.length > 0;
+  console.log("Metadata:", metadata);
 
   return (
     <div className={styles.overlay} onClick={onClose}>
@@ -175,9 +196,7 @@ export function ResearchModal({
 
         <div className={styles.body}>
           {isLoading && <p className={styles.status}>Researching…</p>}
-
           {error && <p className={styles.error}>{error}</p>}
-
           {!isLoading && !error && !hasMetaData && !hasImages && (
             <p className={styles.status}>
               No metadata or images found on the source page.
@@ -194,24 +213,23 @@ export function ResearchModal({
               <MetaRow label="Copyright" value={metadata.copyright} />
             </div>
           )}
-
           {!isLoading && !error && hasImages && (
             <div className={styles.gallerySection}>
               <span className={styles.gallerySectionLabel}>
                 Images from source ({metadata.images.length})
               </span>
               <div className={styles.gallery}>
-                {metadata.images.map((src, i) => (
+                {metadata.images.map((img, i) => (
                   <GalleryImage
-                    key={src}
-                    src={src}
+                    key={img.url}
+                    src={img.url}
+                    caption={img.caption}
                     onSelect={() => setLightboxIndex(i)}
                   />
                 ))}
               </div>
             </div>
           )}
-
           {!isLoading && metadata.pageUrl && (
             <a
               className={styles.sourceLink}
@@ -227,12 +245,13 @@ export function ResearchModal({
 
       {lightboxIndex !== null && metadata.images[lightboxIndex] && (
         <Lightbox
-          src={metadata.images[lightboxIndex]}
+          src={metadata.images[lightboxIndex].url}
+          caption={metadata.images[lightboxIndex].caption}
           onClose={() => setLightboxIndex(null)}
           onPrev={() => setLightboxIndex((i) => Math.max(0, (i ?? 0) - 1))}
           onNext={() =>
             setLightboxIndex((i) =>
-              Math.min(metadata.images.length - 1, (i ?? 0) + 1)
+              Math.min(metadata.images.length - 1, (i ?? 0) + 1),
             )
           }
           hasPrev={lightboxIndex > 0}

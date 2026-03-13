@@ -204,6 +204,11 @@ function formatMetaDate(raw: string | null): string | null {
   }
 }
 
+interface ImageWithCaption {
+  url: string;
+  caption: string | null;
+}
+
 interface PageMetadata {
   photographer: string | null;
   caption: string | null;
@@ -212,7 +217,7 @@ interface PageMetadata {
   location: string | null;
   copyright: string | null;
   pageUrl: string;
-  images: string[];
+  images: ImageWithCaption[];
 }
 
 const SKIP_PATTERNS = [
@@ -235,12 +240,54 @@ const SKIP_PATTERNS = [
   /blank\./i,
 ];
 
-function extractImages(html: string, baseUrl: string): string[] {
+function extractCaptionFromImgTag(imgTag: string): string | null {
+  // Try alt attribute
+  const altMatch = imgTag.match(/alt=["']([^"']+)["']/i);
+  if (altMatch?.[1]) {
+    const alt = decodeHtmlEntities(altMatch[1].trim());
+    // Skip generic/unhelpful alt text
+    if (alt && alt.length > 3 && !/^(image|photo|img|picture|thumbnail|untitled)$/i.test(alt)) {
+      return alt;
+    }
+  }
+  // Try title attribute
+  const titleMatch = imgTag.match(/title=["']([^"']+)["']/i);
+  if (titleMatch?.[1]) {
+    const title = decodeHtmlEntities(titleMatch[1].trim());
+    if (title && title.length > 3) return title;
+  }
+  return null;
+}
+
+function extractFigcaption(html: string, imgSrc: string): string | null {
+  // Find <figure> elements containing this image src and extract their <figcaption>
+  const escapedSrc = imgSrc.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const figureRegex = new RegExp(
+    `<figure[^>]*>[\\s\\S]*?${escapedSrc}[\\s\\S]*?</figure>`,
+    "i"
+  );
+  const figureMatch = html.match(figureRegex);
+  if (figureMatch) {
+    const captionMatch = figureMatch[0].match(
+      /<figcaption[^>]*>([\s\S]*?)<\/figcaption>/i
+    );
+    if (captionMatch?.[1]) {
+      // Strip HTML tags from the figcaption content
+      const text = captionMatch[1].replace(/<[^>]+>/g, "").trim();
+      if (text) return decodeHtmlEntities(text);
+    }
+  }
+  return null;
+}
+
+function extractImages(html: string, baseUrl: string): ImageWithCaption[] {
   const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*/gi;
   const srcsetRegex = /srcset=["']([^"']+)["']/gi;
   const ogImages: string[] = [];
   const seen = new Set<string>();
-  const results: string[] = [];
+  const results: ImageWithCaption[] = [];
+  // Map from raw src to the full <img> tag for caption extraction
+  const imgTagMap = new Map<string, string>();
 
   // Extract og:image and twitter:image (usually high quality)
   for (const prop of ["og:image", "twitter:image", "twitter:image:src"]) {
@@ -254,6 +301,7 @@ function extractImages(html: string, baseUrl: string): string[] {
   let match: RegExpExecArray | null;
   while ((match = imgRegex.exec(html)) !== null) {
     candidates.push(match[1]);
+    imgTagMap.set(match[1], match[0]);
   }
 
   // Also grab largest images from srcset attributes
@@ -285,7 +333,14 @@ function extractImages(html: string, baseUrl: string): string[] {
     // Skip icons, logos, tracking pixels, etc.
     if (SKIP_PATTERNS.some((p) => p.test(absolute))) continue;
 
-    results.push(absolute);
+    // Extract caption: try figcaption first, then img tag attributes
+    let caption: string | null = extractFigcaption(html, raw);
+    if (!caption) {
+      const imgTag = imgTagMap.get(raw);
+      if (imgTag) caption = extractCaptionFromImgTag(imgTag);
+    }
+
+    results.push({ url: absolute, caption });
   }
 
   return results.slice(0, 50); // cap at 50 images
@@ -354,9 +409,10 @@ function extractPageMetadata(html: string, baseUrl: string): PageMetadata {
 
 // Image proxy endpoint — serves image inline (for gallery thumbnails)
 app.get("/api/proxy-image", async (req, res) => {
-  const imageUrl = req.query.url as string;
+  const raw = req.query.url;
+  const imageUrl = Array.isArray(raw) ? raw[0] : raw;
 
-  if (!imageUrl) {
+  if (!imageUrl || typeof imageUrl !== "string") {
     res.status(400).json({ error: "Missing query parameter 'url'" });
     return;
   }
@@ -391,9 +447,10 @@ app.get("/api/proxy-image", async (req, res) => {
 
 // Download proxy endpoint
 app.get("/api/download", async (req, res) => {
-  const imageUrl = req.query.url as string;
+  const raw = req.query.url;
+  const imageUrl = Array.isArray(raw) ? raw[0] : raw;
 
-  if (!imageUrl) {
+  if (!imageUrl || typeof imageUrl !== "string") {
     res.status(400).json({ error: "Missing query parameter 'url'" });
     return;
   }
