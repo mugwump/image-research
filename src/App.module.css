@@ -1,0 +1,43 @@
+.app {
+  min-height: 100vh;
+  background: #f9fafb;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #111827;
+}
+
+.header {
+  padding: 1.5rem 2rem;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+.error {
+  text-align: center;
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.resultCount {
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin-bottom: 1.5rem;
+}
+
+.loading {
+  text-align: center;
+  color: #6b7280;
+  font-size: 1rem;
+}
