@@ -214,6 +214,34 @@
   color: #d1d5db;
 }
 
+.lightboxArrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: #fff;
+  font-size: 3rem;
+  cursor: pointer;
+  padding: 0.25rem 0.75rem;
+  border-radius: 8px;
+  line-height: 1;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.lightboxArrow:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.lightboxArrowLeft {
+  left: 1rem;
+}
+
+.lightboxArrowRight {
+  right: 1rem;
+}
+
 .lightboxDownload {
   padding: 0.5rem 1.25rem;
   font-size: 0.9rem;

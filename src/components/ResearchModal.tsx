@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ResearchMetadata } from "../types";
 import { downloadImage } from "../utils";
 import styles from "./ResearchModal.module.css";
@@ -65,9 +65,17 @@ function GalleryImage({
 function Lightbox({
   src,
   onClose,
+  onPrev,
+  onNext,
+  hasPrev,
+  hasNext,
 }: {
   src: string;
   onClose: () => void;
+  onPrev: () => void;
+  onNext: () => void;
+  hasPrev: boolean;
+  hasNext: boolean;
 }) {
   const proxiedSrc = `/api/proxy-image?url=${encodeURIComponent(src)}`;
 
@@ -76,17 +84,53 @@ function Lightbox({
     downloadImage(src, "image");
   };
 
+  const handleKey = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowLeft" && hasPrev) onPrev();
+      else if (e.key === "ArrowRight" && hasNext) onNext();
+    },
+    [onClose, onPrev, onNext, hasPrev, hasNext]
+  );
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [handleKey]);
+
   return (
     <div className={styles.lightboxOverlay} onClick={onClose}>
       <button className={styles.lightboxClose} onClick={onClose}>
         ✕
       </button>
+
+      {hasPrev && (
+        <button
+          className={`${styles.lightboxArrow} ${styles.lightboxArrowLeft}`}
+          onClick={(e) => { e.stopPropagation(); onPrev(); }}
+          title="Previous image"
+        >
+          ‹
+        </button>
+      )}
+
       <img
         className={styles.lightboxImg}
         src={proxiedSrc}
         alt=""
         onClick={(e) => e.stopPropagation()}
       />
+
+      {hasNext && (
+        <button
+          className={`${styles.lightboxArrow} ${styles.lightboxArrowRight}`}
+          onClick={(e) => { e.stopPropagation(); onNext(); }}
+          title="Next image"
+        >
+          ›
+        </button>
+      )}
+
       <button
         className={styles.lightboxDownload}
         onClick={handleDownload}
@@ -104,7 +148,7 @@ export function ResearchModal({
   error,
   onClose,
 }: ResearchModalProps) {
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const hasMetaData =
     metadata.photographer ||
@@ -157,11 +201,11 @@ export function ResearchModal({
                 Images from source ({metadata.images.length})
               </span>
               <div className={styles.gallery}>
-                {metadata.images.map((src) => (
+                {metadata.images.map((src, i) => (
                   <GalleryImage
                     key={src}
                     src={src}
-                    onSelect={setLightboxSrc}
+                    onSelect={() => setLightboxIndex(i)}
                   />
                 ))}
               </div>
@@ -181,8 +225,19 @@ export function ResearchModal({
         </div>
       </div>
 
-      {lightboxSrc && (
-        <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+      {lightboxIndex !== null && metadata.images[lightboxIndex] && (
+        <Lightbox
+          src={metadata.images[lightboxIndex]}
+          onClose={() => setLightboxIndex(null)}
+          onPrev={() => setLightboxIndex((i) => Math.max(0, (i ?? 0) - 1))}
+          onNext={() =>
+            setLightboxIndex((i) =>
+              Math.min(metadata.images.length - 1, (i ?? 0) + 1)
+            )
+          }
+          hasPrev={lightboxIndex > 0}
+          hasNext={lightboxIndex < metadata.images.length - 1}
+        />
       )}
     </div>
   );
