@@ -15,3 +15,13 @@ export interface SearchResponse {
   totalResults: string;
   nextStart: number | null;
 }
+
+export interface ResearchMetadata {
+  photographer: string | null;
+  caption: string | null;
+  datePublished: string | null;
+  dateTaken: string | null;
+  location: string | null;
+  copyright: string | null;
+  pageUrl: string;
+}
